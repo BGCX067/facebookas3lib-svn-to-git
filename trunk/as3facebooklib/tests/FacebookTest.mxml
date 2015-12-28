@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" creationComplete="initApp();">
+
+	<mx:Script>
+		<![CDATA[
+			import cn.alvas.webapis.facebook.Album;
+			import cn.alvas.webapis.facebook.PhotosAlbumResult;
+			import cn.alvas.webapis.facebook.AuthSessionResult;
+			import cn.alvas.webapis.facebook.AuthTokenResult;
+			import cn.alvas.webapis.facebook.FacebookError;
+			import cn.alvas.webapis.facebook.events.FacebookResultEvent;
+			import cn.alvas.webapis.facebook.FacebookService;
+			
+			
+			private var service : FacebookService;
+			/**
+			 * Initialize the application by creating a new instance of
+			 * the Flickr api with our application's api key
+			 */
+			public function initApp():void
+			{
+				var api_key:String = "6fd15f01688f6259ae83350820add8b0";
+				service = new FacebookService( api_key );
+				service.setSecret("df1c273e7141af1dd149f16b62a8a847");
+				
+				if ( getFacebookSO().data.auth_token ) {
+					debugTA.text += "Found stored token.. trying to auto-login\n";
+					getTokenButton.enabled = false;
+				}else{
+					getTokenButton.enabled = true;
+				}
+				getTokenButton.addEventListener(MouseEvent.CLICK, __getToken);
+				getSessionButton.addEventListener(MouseEvent.CLICK, __getSession);		
+				getAlbumsButton.addEventListener(MouseEvent.CLICK, __getAlbums);		
+				createAlbumButton.addEventListener(MouseEvent.CLICK,__createAlbum);
+				goURL.addEventListener(MouseEvent.CLICK, function():void{ navigateToURL(new URLRequest("http://www.facebook.com/login.php?api_key=6fd15f01688f6259ae83350820add8b0&v=1.0")); });			
+			}
+			
+			private function __getToken(e : Event) : void{
+				getTokenButton.enabled = false;
+				getTokenButton.label = "token getting...";
+				service.addEventListener(  FacebookResultEvent.AUTH_CREATE_TOKEN, createTokenResponse );
+				service.getAuth().createToken();	
+			}
+			
+			private function createTokenResponse( event:FacebookResultEvent ):void {
+				debugTA.text += "createTokenResponse: success = " + event.getSuccess() + "\n";
+				if ( event.getSuccess() ) {
+					var authTResult:AuthTokenResult = AuthTokenResult( event.getData()["token"] );					
+					debugTA.text += authTResult.toString() + "\n";
+					service.setToken( authTResult.getToken() );
+					getFacebookSO().data.auth_token = service.getToken();
+					try{
+						getFacebookSO().flush();
+					}catch(e : Error){}
+					
+					debugTA.text += "token: " + service.getToken() + "\n";
+
+					getTokenButton.enabled = false;
+					getTokenButton.label = "token got";
+				} else {
+					getTokenButton.enabled = true;
+					getTokenButton.label = "get token";
+					getFacebookSO().clear();
+				}
+			}
+			
+			private function getTokenResponse( event:FacebookResultEvent ):void {
+				debugTA.text += "createTokenResponse: success = " + event.getSuccess() + "\n";
+				
+				if ( event.getSuccess() ) {
+								
+					
+				} else {
+					var error : FacebookError = event.getData().error as FacebookError;
+					debugTA.text += "error code: " + error.getErrorCode() + "\n";
+					debugTA.text += "error message: " + error.getErrorMessage() + "\n";
+				}
+			}
+			
+			private function __getSession(e : Event) : void{
+				getSessionButton.enabled = false;
+				getSessionButton.label = "session getting...";
+				service.addEventListener(  FacebookResultEvent.AUTH_GET_SEESION, getSessionResponse );
+				service.getAuth().getSession( tokenText.text );
+			} 
+			
+			private function getSessionResponse( event:FacebookResultEvent ):void {
+				debugTA.text += "getSessionResponse: success = " + event.getSuccess() + "\n";
+				if ( event.getSuccess() ) {
+					getSessionButton.enabled = false;
+					getSessionButton.label = "session got";
+					// Re-use the login logic in getTokenResponse
+					var authSResult:AuthSessionResult = AuthSessionResult( event.getData()["session"] );
+					service.setSession(authSResult.getSession());
+					debugTA.text += authSResult.toString() + "\n";
+				} else {
+					getSessionButton.enabled = true;
+					getSessionButton.label = "get session";
+					getFacebookSO().clear();
+				}
+			}
+			
+			private function __getAlbums(e : Event) : void{
+				service.addEventListener(FacebookResultEvent.PHOTOS_GET_ALBUMS, getAlbumsResponse);
+				service.getPhotos().getAlbums(parseInt(uidTxt.text), aidsTxt.text);
+			}
+			
+			private function getAlbumsResponse( event:FacebookResultEvent ):void {
+				if ( event.getSuccess() ) {
+					var photosAlbumResult:PhotosAlbumResult = PhotosAlbumResult( event.getData()["getalbums"] );
+					var a : Array = photosAlbumResult.getAlbums();
+					debugTA.text += ("--getAlbums : "+a.length)+"\n";
+					for each( var album : Album in a){
+						debugTA.text += "-----"+(album)+"\n";
+					}
+				}else{
+					
+				}
+			}
+			
+			private function __createAlbum(e : Event) : void{
+				service.addEventListener(FacebookResultEvent.PHOTOS_CREATE_ALBUM, createAlbumResponse);
+				service.getPhotos().createAlbum(nameTxt.text, locationTxt.text, descTxt.text);
+			}
+			
+			private function createAlbumResponse( event:FacebookResultEvent ):void {
+				if ( event.getSuccess() ) {
+					var album:Album = Album( event.getData()["createalbum"] );
+					debugTA.text += ("--createAlbum : "+album)+"\n";
+				}else{
+					
+				}
+			}
+			
+						
+			private function getFacebookSO() : SharedObject{
+				var facebookSO:SharedObject = SharedObject.getLocal( "FacebookServiceTest" );
+				return facebookSO;
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:Panel width="100%" height="100%" layout="absolute">
+		<mx:Button x="10" y="10" label="get token" id="getTokenButton"/>
+		<mx:Label x="0" y="28" id="tokenLabel"/>	
+		<mx:TextArea width="600" height="340" x="10" y="398" cornerRadius="10" id="debugTA"/>
+		<mx:Button x="521.5" y="10" label="get session" id="getSessionButton"/>
+		<mx:TextInput x="253" y="10" width="260.5" id="tokenText"/>
+		<mx:Button x="105" y="10" label="getTokenAfterLogin" id="goURL"/>
+		<mx:HRule x="0" y="40" width="90%"/>
+		<mx:HRule x="0" y="169" width="90%" height="0"/>
+		<mx:HRule x="0" y="169" width="90%"/>
+		<mx:Label x="10" y="56" text="Albums"/>
+		<mx:TextInput x="118" y="54" id="uidTxt"/>
+		<mx:TextInput x="319" y="54" id="aidsTxt"/>
+		<mx:Button x="487" y="54" label="get albums" id="getAlbumsButton"/>
+		<mx:Label x="90" y="56" text="uid:"/>
+		<mx:Label x="286" y="56" text="aids:"/>
+		
+		<mx:Label x="10" y="106" text="name:"/>
+		<mx:Label x="258" y="106" text="location:"/>
+		<mx:Label x="10" y="132" text="description:"/>
+		<mx:TextInput x="85" y="104" id="nameTxt"/>
+		<mx:TextInput x="319" y="104" id="locationTxt"/>
+		<mx:TextInput x="85" y="130" id="descTxt"/>
+		<mx:Button x="378" y="130" label="create album" id="createAlbumButton"/>
+		
+		<mx:HRule x="0" y="88" width="525"/>		
+	</mx:Panel>	
+</mx:Application>
